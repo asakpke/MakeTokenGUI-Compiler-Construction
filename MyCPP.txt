@@ -1,0 +1,252 @@
+// Token.cpp: implementation of the CToken class.
+//
+//////////////////////////////////////////////////////////////////////
+
+#include "stdafx.h"
+#include "MakeTokenGUI.h"
+#include "Token.h"
+
+#ifdef _DEBUG
+#undef THIS_FILE
+static char THIS_FILE[]=__FILE__;
+#define new DEBUG_NEW
+#endif
+
+//////////////////////////////////////////////////////////////////////
+// Construction/Destruction
+//////////////////////////////////////////////////////////////////////
+
+CToken::CToken()
+{
+
+}
+
+CToken::CToken(CString sSourceFile)
+{
+	OpenSourceFile(sSourceFile);
+	
+	//if(m_fp == NULL)
+		//m_fp = fopen("..\\" + m_sTXT_FILE_NAME, "r");
+	//if(m_fp == NULL)
+}
+
+CToken::~CToken()
+{
+
+}
+
+char CToken::GetNextChar()
+{
+	if(m_cNextChar != EOF)	
+		m_cNextChar = fgetc(m_fp);
+	//else
+		//MessageBox("EOF");
+
+	return m_cNextChar;
+}
+
+char CToken::GetCurrentChar()
+{
+	return m_cNextChar;
+}
+
+ETokenType CToken::GetNextToken(CString *psToken,CString *psTokenType)
+{	
+	int nsLen;
+	//bool bReadChar;
+
+	m_eNextTokenType = tt_Null;
+	m_sNextTokenType = "Null";
+
+	m_sNextToken.Empty();
+
+	//if(m_cNextChar == EOF)
+	//{
+		//MessageBox("EOF");
+		//return;// m_sNextToken;
+	//}
+
+	while(m_cNextChar != EOF)
+	{
+		//bReadChar = true;
+
+		while(m_cNextChar == ' ')
+		{
+			GetNextChar();
+			//if(m_cNextChar == EOF)
+				//MessageBox("EOF");
+		}
+
+		//if eof
+
+		if(m_cNextChar >= '0' && m_cNextChar <= '9') // number
+		{			
+			GetTTNumber();			
+			break;
+		} 
+		else if(m_cNextChar >= 'A' && m_cNextChar <= 'Z' // names
+			 || m_cNextChar >= 'a' && m_cNextChar <= 'z'
+			 || m_cNextChar == '_')
+		{			
+			GetTTNames();			
+			break;
+		} // else if(m_cNextChar >= 'A' && m_cNextChar <= 'Z'
+		else if(m_cNextChar == '/') // comments
+		{			
+			nsLen = m_sNextToken.GetLength();
+			m_sNextToken.Insert(nsLen, m_cNextChar);
+
+			GetNextChar();
+			if(m_cNextChar == '/' || m_cNextChar == '*')
+				GetTTComments();
+
+			break;
+		}
+		else if(m_cNextChar == '\"') // string
+		{
+			GetTTString();									
+			break;
+		}
+		
+		GetNextChar();				
+	} // while(ch != EOF)
+	//if(m_cNextChar == EOF)
+		//MessageBox("EOF");
+
+	if(psToken != NULL)
+		*psToken = m_sNextToken;
+
+	if(psTokenType != NULL)
+		*psTokenType = m_sNextTokenType;
+
+	return m_eNextTokenType;//m_sNextToken;
+} // CToken::GetNextToken()
+
+bool CToken::OpenSourceFile(CString sSourceFile)
+{
+	m_sSourceFile = sSourceFile;
+
+	m_fp = fopen(m_sSourceFile, "r");
+	if(m_fp == NULL)
+		return false;
+
+	return true;
+}
+
+void CToken::CloseSourceFile()
+{
+	fclose(m_fp);	
+
+	m_fp = NULL;
+}
+
+void CToken::GetTTNumber()
+{
+	int nsLen;
+
+	m_eNextTokenType = ttNumber;
+	m_sNextTokenType = "Number";
+
+	while(m_cNextChar >= '0' && m_cNextChar <= '9')
+	{
+		nsLen = m_sNextToken.GetLength();
+		m_sNextToken.Insert(nsLen, m_cNextChar);
+		GetNextChar();
+	}			
+}
+
+void CToken::GetTTNames()
+{
+	int nsLen;	
+
+	m_eNextTokenType = ttNames;
+	m_sNextTokenType = "Names";
+
+	while(m_cNextChar >= 'A' && m_cNextChar <= 'Z'
+	   || m_cNextChar >= 'a' && m_cNextChar <= 'z'
+	   || m_cNextChar == '_'
+	   || m_cNextChar >= '0' && m_cNextChar <= '9')
+	{
+		nsLen = m_sNextToken.GetLength();
+		m_sNextToken.Insert(nsLen, m_cNextChar);
+		GetNextChar();
+	}
+}
+
+void CToken::GetTTComments()
+{
+	int nsLen;
+
+	if(m_cNextChar == '/')
+	{
+		m_eNextTokenType = ttCPPComments;
+		m_sNextTokenType = "CPP's Comments";				
+
+		while(m_cNextChar != 10) // end of line
+		{
+			nsLen = m_sNextToken.GetLength();
+			m_sNextToken.Insert(nsLen, m_cNextChar);
+			GetNextChar();
+		}				
+	}
+	else if(m_cNextChar == '*')
+	{
+		char cPrevChar='x';
+		m_eNextTokenType = ttCComments;
+		m_sNextTokenType = "C's Comments";				
+
+		//store '*'
+		nsLen = m_sNextToken.GetLength();
+		m_sNextToken.Insert(nsLen, m_cNextChar);
+
+		GetNextChar();
+		while(cPrevChar != '*' && m_cNextChar != '/')
+		{
+			nsLen = m_sNextToken.GetLength();
+			m_sNextToken.Insert(nsLen, m_cNextChar);
+
+			cPrevChar = m_cNextChar;
+			GetNextChar();
+		}
+		// store last '/'
+		nsLen = m_sNextToken.GetLength();
+		m_sNextToken.Insert(nsLen, m_cNextChar);
+
+		GetNextChar();
+	}
+}
+
+void CToken::GetTTString()
+{
+	int nsLen;
+
+	m_eNextTokenType = ttString;
+	m_sNextTokenType = "String";
+
+	nsLen = m_sNextToken.GetLength();
+	m_sNextToken.Insert(nsLen, m_cNextChar);
+
+	GetNextChar();
+	char cPrevChar='x';
+	bool bHasRemnString;
+	do
+	{
+		bHasRemnString = false;
+
+		while(m_cNextChar != '\"')
+		{
+			nsLen = m_sNextToken.GetLength();
+			m_sNextToken.Insert(nsLen, m_cNextChar);
+			cPrevChar = m_cNextChar;
+			GetNextChar();
+		}
+
+		nsLen = m_sNextToken.GetLength();
+		m_sNextToken.Insert(nsLen, m_cNextChar);
+
+		if(cPrevChar == '\\')
+			bHasRemnString = true;
+
+		GetNextChar();
+	}while(bHasRemnString == true);
+}
